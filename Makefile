@@ -1,4 +1,3 @@
-all    :; dapp build
+all    :; dapp --use solc:0.7.4 build
 clean  :; dapp clean
-test   :; dapp test
-deploy :; dapp create DhCover20201228
+test   :; dapp --use solc:0.7.4 test
