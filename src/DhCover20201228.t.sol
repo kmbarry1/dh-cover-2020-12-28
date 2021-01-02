@@ -5,6 +5,8 @@ import "ds-test/test.sol";
 import "ds-token/token.sol";
 
 import "./Blacksmith.sol";
+import "./IBlacksmith.sol";
+import "./FixedBlacksmith.sol";
 import "./COVER.sol";
 
 interface Hevm {
@@ -15,13 +17,13 @@ contract Guy {
     function approve(DSToken token, address addr) external {
         token.approve(addr);
     }
-    function deposit(Blacksmith bs, address lpToken, uint256 amount) external {
+    function deposit(IBlacksmith bs, address lpToken, uint256 amount) external {
         bs.deposit(lpToken, amount);
     }
-    function withdraw(Blacksmith bs, address lpToken, uint256 amount) external {
+    function withdraw(IBlacksmith bs, address lpToken, uint256 amount) external {
         bs.withdraw(lpToken, amount);
     }
-    function claimRewards(Blacksmith bs, address lpToken) external {
+    function claimRewards(IBlacksmith bs, address lpToken) external {
         bs.claimRewards(lpToken);
     }
 }
@@ -35,27 +37,41 @@ contract DhCover20201228Test is DSTest {
     Hevm hevm;
 
     COVER coverToken;
-    Blacksmith blacksmith;
+    IBlacksmith blacksmith;
     DSToken lpToken;
 
     function setUp() public {
         hevm = Hevm(address(CHEAT_CODE));
-
+        hevm.warp(1605830400);  // 11/20/2020 12am UTC
+        lpToken = new DSToken("LPTOKEN");
         coverToken = new COVER();
+    }
+
+    modifier exploitSetup() {
         address governance = address(this);
         address treasury = address(0x1);
         blacksmith = new Blacksmith(address(coverToken), governance, treasury);
-        hevm.warp(1605830400);  // 11/20/2020 12am UTC
         coverToken.release(treasury, address(0x2), address(blacksmith), address(0x3));
-
-        lpToken = new DSToken("LPTOKEN");
         blacksmith.addPool(address(lpToken), 100);
 
         // nice round number for weekly rewards (100 per day)
         blacksmith.updateWeeklyTotal(700 * 10**18);
+        _;
     }
 
-    function test_exploit() public {
+    modifier fixSetup() {
+        address governance = address(this);
+        address treasury = address(0x1);
+        blacksmith = new FixedBlacksmith(address(coverToken), governance, treasury);
+        coverToken.release(treasury, address(0x2), address(blacksmith), address(0x3));
+        blacksmith.addPool(address(lpToken), 100);
+
+        // nice round number for weekly rewards (100 per day)
+        blacksmith.updateWeeklyTotal(700 * 10**18);
+        _;
+    }
+
+    function test_exploit() exploitSetup public {
         Guy bob = new Guy();
 
         uint256 AMT = 1000 * 10**18;
@@ -85,6 +101,35 @@ contract DhCover20201228Test is DSTest {
         assertEq(coverToken.balanceOf(address(bob)), (10**23) * (1 ether));
 
         // This exceeds the "intended" daily maximum mint.
-        assertGt(coverToken.balanceOf(address(bob)), blacksmith.weeklyTotal() / 7);
+        assertGt(coverToken.balanceOf(address(bob)), Blacksmith(address(blacksmith)).weeklyTotal() / 7);
+    }
+
+    function test_fix() fixSetup public {
+        Guy bob = new Guy();
+
+        uint256 AMT = 1000 * 10**18;
+        lpToken.mint(address(bob), AMT);
+        bob.approve(lpToken, address(blacksmith));
+
+        bob.deposit(blacksmith, address(lpToken), 1);
+
+        // go 1 day into the future
+        hevm.warp(block.timestamp + 1 days);
+
+        // In this call, we update pool.accRewardsPerToken to (100 ether) * 10^12 / 1.
+        // (100 COVER per wei of LP tokens)
+        // Due to not using updated pool values to calculate bob's rewards, however,
+        // Bob receives the correct rewards and thus his rewardWriteoff is (100 ether).
+        // Bob's staked amount is increased to AMT = 1000 * 10**18.
+        bob.deposit(blacksmith, address(lpToken), AMT - 1);
+
+        // No time has passed, Bob simply receives the 100 COVER assigned to him in the last call.
+        bob.claimRewards(blacksmith, address(lpToken));
+
+        // Bob minted 100 COVER
+        assertEq(coverToken.balanceOf(address(bob)), 100 * (1 ether));
+
+        // This equals the "intended" daily maximum mint.
+        assertEq(coverToken.balanceOf(address(bob)), FixedBlacksmith(address(blacksmith)).weeklyTotal() / 7);
     }
 }
