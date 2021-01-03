@@ -39,17 +39,19 @@ contract DhCover20201228Test is DSTest {
     COVER coverToken;
     IBlacksmith blacksmith;
     DSToken lpToken;
+    address governance;
+    address treasury;
 
     function setUp() public {
         hevm = Hevm(address(CHEAT_CODE));
         hevm.warp(1605830400);  // 11/20/2020 12am UTC
         lpToken = new DSToken("LPTOKEN");
         coverToken = new COVER();
+        governance = address(this);
+        treasury = address(0x1);
     }
 
     modifier exploitSetup() {
-        address governance = address(this);
-        address treasury = address(0x1);
         blacksmith = new Blacksmith(address(coverToken), governance, treasury);
         coverToken.release(treasury, address(0x2), address(blacksmith), address(0x3));
         blacksmith.addPool(address(lpToken), 100);
@@ -60,8 +62,6 @@ contract DhCover20201228Test is DSTest {
     }
 
     modifier fixSetup() {
-        address governance = address(this);
-        address treasury = address(0x1);
         blacksmith = new FixedBlacksmith(address(coverToken), governance, treasury);
         coverToken.release(treasury, address(0x2), address(blacksmith), address(0x3));
         blacksmith.addPool(address(lpToken), 100);
@@ -131,5 +131,8 @@ contract DhCover20201228Test is DSTest {
 
         // This equals the "intended" daily maximum mint.
         assertEq(coverToken.balanceOf(address(bob)), FixedBlacksmith(address(blacksmith)).weeklyTotal() / 7);
+    }
+
+    function prove_exploit() /* exploitSetup */ public {
     }
 }
